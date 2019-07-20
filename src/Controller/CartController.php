@@ -4,6 +4,8 @@ namespace LojaApp\Controller;
 use LojaApp\Http\Session;
 use LojaApp\Http\Flash;
 use LojaApp\MVC\View;
+use LojaApp\Model\UserOrder;
+use LojaApp\Database\Connection;
 
 use PHPSC\PagSeguro\Credentials;
 use PHPSC\PagSeguro\Environments\Production;
@@ -64,6 +66,11 @@ class CartController
     public function checkout()
     {
         try {
+            
+            if(!Session::has('user')) {
+                return header('Location: ' . HOME . '/user');
+            }
+
             $cart = Session::get('cart');
 
             if(is_null($cart)) return header('Location: ' . HOME);
@@ -77,11 +84,20 @@ class CartController
             );
 
             $service = new CheckoutService($credentials);
+
+            $order = [
+                'user_id' => Session::get('user')->id,
+                'items'   => serialize($cart),
+                'pagseguro_status' => 0,
+                'pagseguro_code'   => 0,
+            ];
+            $userOrder = (new UserOrder(Connection::getInstance()))
+                        ->createOrder($order);
         
             $checkout = $service->createCheckoutBuilder();
 
             foreach($cart as $key => $c) {
-                $checkout->addItem(new Item($key + 1, $c['name'], $c['price']));  
+                $checkout->addItem(new Item($userOrder, $c['name'], $c['price'], $c['qtd']));  
             }
             
             $response = $service->checkout($checkout->getCheckout());
